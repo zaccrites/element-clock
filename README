@@ -1,0 +1,7 @@
+
+To program the chip:
+
+    $ make
+    $ sudo make fuses
+    $ sudo make install
+
