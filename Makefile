@@ -1,26 +1,51 @@
 
-NAME=main
-PROGRAMMER=usbtiny
-PART_SHORT=t44
-PART_LONG=attiny44a
+NAME:=clock
+PROGRAMMER:=usbtiny
+PART_SHORT:=t44
+PART_LONG:=attiny44a
 
-CC=avr-gcc
-CFLAGS= -std=c11 -Os -DF_CPU=1000000 -mmcu=${PART_LONG}
-OBJCOPY=avr-objcopy
+SRC_DIR:=src
+BUILD_DIR:=build
+ELF_FILE:=$(BUILD_DIR)/$(NAME).elf
+HEX_FILE:=$(BUILD_DIR)/$(NAME).hex
 
-.PHONY: install clean fuses
+CC:=avr-gcc
+CFLAGS:= -std=c11 -Os -DF_CPU=1000000 -mmcu=$(PART_LONG)
+LINKER:=avr-gcc
+LDFLAGS:= -mmcu=$(PART_LONG)
+OBJCOPY:=avr-objcopy
 
-${NAME}.hex: ${NAME}.o
-	${OBJCOPY} -j .text -j .data -O ihex $< $@
+SOURCES=$(wildcard $(SRC_DIR)/*.c)
+OBJECTS=$(SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 
-${NAME}.o: ${NAME}.c
-	${CC} ${CFLAGS} -o $@ $<
 
-install: ${NAME}.hex
-	avrdude -c ${PROGRAMMER} -p ${PART_SHORT} -U flash:w:$<:i
+.PHONY: install set_fuses clean
+
+
+$(HEX_FILE): $(ELF_FILE) | $(BUILD_DIR)
+	$(OBJCOPY) -j .text -j .data -O ihex $< $@
+
+$(ELF_FILE): $(OBJECTS) | $(BUILD_DIR)
+	$(LINKER) $(LDFLAGS) $(OBJECTS) -o $(ELF_FILE)
+
+# http://stackoverflow.com/a/2501673
+DEPS=$(OBJECTS:%.o=%.d)
+-include $(DEPS)
+
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -MMD -MF $(patsubst %.o,%.d,$@) -o $@
+
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
+
+install: $(HEX_FILE)
+	avrdude -c $(PROGRAMMER) -p $(PART_SHORT) -U flash:w:$<:i
+
+set_fuses:
+	avrdude -F -V -c $(PROGRAMMER) -p $(PART_SHORT) -U lfuse:w:0x7d:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m
 
 clean:
-	rm -f ${NAME}.hex ${NAME}.o
+	rm -rf $(BUILD_DIR)
 
-fuses:
-	avrdude -F -V -c ${PROGRAMMER} -p ${PART_SHORT} -U lfuse:w:0x7d:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m
+

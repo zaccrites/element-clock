@@ -1,77 +1,14 @@
-/**
-    Element clock firmware.
-
-    @author Zac Crites
-    @date   August 5, 2016
-*/
 
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <avr/io.h>
-#include <avr/pgmspace.h>
 #include <avr/interrupt.h>
+#include <avr/pgmspace.h>
 #include <util/delay.h>
 
+#include "io.h"
+#include "clock.h"
 
-/**
-    IO pin configuration.
-*/
-enum
-{
-    SHIFT_DATA_PIN      = (1 << PA5),
-    SHIFT_CLOCK_PIN     = (1 << PA4),
-    SHIFT_LATCH_PIN     = (1 << PA3),
-    SHIFT_CLEAR_PIN     = (1 << PA2),
-    ELEMENT_MODE_PIN    = (1 << PA1),
-    FAST_CLOCK_MODE_PIN = (1 << PA0),
-};
-
-
-// Todo: move this stuff to io.c or something
-
-/**
-    Setup chip IO pins.
-
-    Outputs:
-        SHIFT_DATA_PIN      : Shift register data.
-        SHIFT_CLOCK_PIN     : Shift register clock.
-        SHIFT_LATCH_PIN     : Shift register latch.
-        SHIFT_CLEAR_PIN     : Shift register clear (active low).
-
-    Inputs:
-        ELEMENT_MODE_PIN    : Display mode switch (active low).
-        FAST_CLOCK_MODE_PIN : Clock speedup mode for setting time (active low).
-
-*/
-void setupIoPins()
-{
-    DDRA = SHIFT_DATA_PIN | SHIFT_CLOCK_PIN | SHIFT_LATCH_PIN | SHIFT_CLEAR_PIN;
-
-    // Enable pullups on inputs
-    PORTA |= ELEMENT_MODE_PIN | FAST_CLOCK_MODE_PIN;
-}
-
-
-/**
-    Determine if the clock is in speedup mode.
-*/
-bool isFastClockMode()
-{
-    return ! (PINA & FAST_CLOCK_MODE_PIN);
-}
-
-/**
-    Determine if the Element Mode switch is enabled.
-*/
-bool isElementMode()
-{
-    return ! (PINA & ELEMENT_MODE_PIN);
-}
-
-
-
-// Todo: move to display.c or something
 
 /**
     Font segment and digit select bit indexes.
@@ -106,7 +43,7 @@ enum
 
     All printable characters are supported, though some more than others.
 */
-const uint16_t displayFont[] PROGMEM = {
+static const uint16_t displayFont[] PROGMEM = {
     UNDEFINED_GLYPH,                                                     // NUL
     UNDEFINED_GLYPH,                                                     // SOH
     UNDEFINED_GLYPH,                                                     // STX
@@ -244,7 +181,7 @@ const uint16_t displayFont[] PROGMEM = {
 /**
     Atomic symbol character data for elements "0" through 59.
 */
-const uint8_t atomicSymbolChars[] PROGMEM = {
+static const uint8_t atomicSymbolChars[] PROGMEM = {
     '_', '_',
     'H', ' ',
     'H', 'e',
@@ -308,183 +245,35 @@ const uint8_t atomicSymbolChars[] PROGMEM = {
 };
 
 
-
-
-// Todo: Move to io.c or shift.c or something
-
-#define SHIFT_CLOCK_DELAY_US  2
-
 /**
-    Shift a bit into the shift register.
-
-    @param bit  True for a logic HIGH, False for logic LOW.
+    Setup the blink/scroll timer.
 */
-void shiftOutBit(bool bit)
+void setupDisplayTimer()
 {
-    if (bit)
-    {
-        PORTA |= SHIFT_DATA_PIN;
-    }
-    else
-    {
-        PORTA &= ~SHIFT_DATA_PIN;
-    }
-
-    _delay_us(SHIFT_CLOCK_DELAY_US);
-    PORTA |= SHIFT_CLOCK_PIN;
-    _delay_us(SHIFT_CLOCK_DELAY_US);
-    PORTA &= ~SHIFT_CLOCK_PIN;
-    _delay_us(SHIFT_CLOCK_DELAY_US);
-}
-
-
-/**
-    Latch the shift register output.
-*/
-void latchShiftRegister()
-{
-    _delay_us(SHIFT_CLOCK_DELAY_US);
-    PORTA |= SHIFT_LATCH_PIN;
-    _delay_us(SHIFT_CLOCK_DELAY_US);
-    PORTA &= ~SHIFT_LATCH_PIN;
-    _delay_us(SHIFT_CLOCK_DELAY_US);
-}
-
-
-/**
-    Clear the shift register.
-*/
-void clearShiftRegister()
-{
-    // Register clear is active low
-    _delay_us(SHIFT_CLOCK_DELAY_US);
-    PORTA &= ~SHIFT_CLEAR_PIN;
-    _delay_us(SHIFT_CLOCK_DELAY_US);
-    PORTA |= SHIFT_CLEAR_PIN;
-    _delay_us(SHIFT_CLOCK_DELAY_US);
-}
-
-
-// Todo: move to timing.c or something
-
-
-/**
-    Timekeeping variables.
-*/
-uint8_t hours = 0;
-uint8_t minutes = 0;
-volatile uint8_t seconds = 0;
-
-
-/**
-    Timer1 CTC match interrupt handler.
-*/
-ISR (TIM1_COMPA_vect)
-{
-    seconds++;
-}
-
-
-void blinkTick();  // from display.c
-ISR (TIM0_COMPA_vect)
-{
-    blinkTick();
-}
-
-/**
-    Timer count values.
-*/
-enum
-{
-    // Timer1 (increments of 64 microseconds)
-    TIMER_COUNT_CLOCK = 15625,            // count 1.000 "seconds" per real second
-    TIMER_COUNT_CLOCK_FAST = 21,          // count 12.40 "minutes" per real second
-
-    // Timer0 (increments of 1024 microseconds)
-    TIMER_COUNT_BLINK = 244,              // check blink state every 249.9 milliseconds
-};
-
-
-/**
-    Set up the hardware timers.
-
-        "We're all here, the lights and noise are blinding.
-         We hang back-- it's all in the timing."
-*/
-void setupTimers()
-{
-    TCCR1B |= (1 << WGM12);               // Configure Timer1 for CTC mode
-    TCCR1B |= (1 << CS11) | (1 << CS10);  // Divide the timer clock by 64
-    TIMSK1 |= (1 << OCIE1A);              // Enable the CTC match interrupt
-    OCR1A = TIMER_COUNT_CLOCK;
-
     TCCR0A |= (1 << WGM01);                   // Configure Timer0 for CTC mode
     TCCR0B |= (1 << CS00) | (1 << CS02);      // Divide the Timer0 clock by 1024
     TIMSK0 |= (1 << OCIE0A);                  // Enable the Timer0 CTC match interrupt
-    OCR0A = TIMER_COUNT_BLINK;
+    OCR0A = 244;                              // period = 249.9 milliseconds.
 }
 
-
-/**
-    Set the timer CTC count based on the selected timer mode.
-*/
-void checkForSpeedMode()
+volatile static uint8_t displayTimerCounter;
+ISR (TIM0_COMPA_vect)
 {
-    static bool wasPreviouslyFastMode = false;
-    bool isCurrentlyFastMode = isFastClockMode();
-
-    // Reset the timer when switching to TIMER_COUNT_CLOCK_FAST, because if
-    // TCNT1 > TIMER_COUNT_CLOCK_FAST at the time then it will miss the CTC
-    // match and result in a ~4 second delay.
-    if (isCurrentlyFastMode && ! wasPreviouslyFastMode)
+    displayTimerCounter++;
+    if (displayTimerCounter > 3)
     {
-        TCNT1 = 0;
+        // Count four times before resetting.
+        // Each count is ~250ms, so resets once per second.
+        displayTimerCounter = 0;
     }
-
-    if (isCurrentlyFastMode)
-    {
-        OCR1A = TIMER_COUNT_CLOCK_FAST;
-    }
-    else
-    {
-        OCR1A = TIMER_COUNT_CLOCK;
-    }
-
-    wasPreviouslyFastMode = isCurrentlyFastMode;
 }
 
 
-/**
-    Update the timekeeping variables.
-*/
-void updateTimeVariables()
+static bool displayShouldBlink = false;
+void setDisplayBlink(bool shouldBlink)
 {
-    if (seconds >= 60)
-    {
-        minutes++;
-        seconds = 0;
-    }
-
-    if (minutes >= 60)
-    {
-        hours++;
-        minutes = 0;
-    }
-
-    if (hours >= 24)
-    {
-        hours = 0;
-    }
+    displayShouldBlink = shouldBlink;
 }
-
-
-// Todo: move to display.c
-
-/**
-    Determines if display should blink.
-*/
-bool displayShouldBlink = false;
-volatile uint8_t blinkCounter = false;
 
 typedef enum
 {
@@ -492,31 +281,16 @@ typedef enum
     BLINK_STATE_ON  = 1,
 } BlinkState;
 
-
-void setDisplayBlink(bool shouldBlink)
-{
-    displayShouldBlink = shouldBlink;
-}
-
-
-void blinkTick()
-{
-    blinkCounter++;
-    if (blinkCounter > 3)
-    {
-        blinkCounter = 0;
-    }
-}
-
-
-
+/**
+    Gets whether the display should be on or off during the current blink cycle.
+*/
 BlinkState getBlinkState()
 {
     if ( ! displayShouldBlink)
     {
         return BLINK_STATE_ON;
     }
-    else if (blinkCounter < 2)
+    else if (displayTimerCounter < 2)
     {
         return BLINK_STATE_ON;
     }
@@ -527,9 +301,6 @@ BlinkState getBlinkState()
 }
 
 
-/**
-    The display modes.
-*/
 typedef enum
 {
     DISPLAY_MODE_DIGITS,
@@ -543,8 +314,7 @@ typedef enum
 */
 DisplayMode getDisplayMode()
 {
-    // Todo: secret message
-    if (isElementMode())
+    if (isElementModeSelected())
     {
         return DISPLAY_MODE_ELEMENTS;
     }
@@ -561,7 +331,7 @@ DisplayMode getDisplayMode()
     @param pSymbol1     Pointer to output for Symbol 1 (the right digit)
     @param pSymbol2     Pointer to output for Symbol 2 (the left digit)
 */
-void getSymbolData(uint8_t n, uint16_t* pSymbol1, uint16_t* pSymbol2)
+static void getSymbolData(uint8_t n, uint16_t* pSymbol1, uint16_t* pSymbol2)
 {
     size_t symbolOffset1;
     size_t symbolOffset2;
@@ -590,10 +360,6 @@ void getSymbolData(uint8_t n, uint16_t* pSymbol1, uint16_t* pSymbol2)
             break;
     }
 
-
-    // Todo: for scrolling message, use the blink count to increment the scroll
-    // position or something
-
     // Check for blink state
     BlinkState blinkState = getBlinkState();
     if (blinkState == BLINK_STATE_OFF)
@@ -606,10 +372,7 @@ void getSymbolData(uint8_t n, uint16_t* pSymbol1, uint16_t* pSymbol2)
     *pSymbol2 = pgm_read_word(displayFont + symbolOffset2);
 }
 
-
-#define DISPLAY_DIGIT_DELAY_MS  2
-
-void drawDigit(uint8_t digit, uint16_t symbol)
+static void drawDigit(uint8_t digit, uint16_t symbol)
 {
     clearShiftRegister();
 
@@ -638,44 +401,15 @@ void drawDigit(uint8_t digit, uint16_t symbol)
 }
 
 
-void drawDigits()
+void drawDisplay()
 {
-    updateTimeVariables();
-
     uint16_t symbols[4];
-    getSymbolData(minutes, &symbols[0], &symbols[1]);
-    getSymbolData(hours, &symbols[2], &symbols[3]);
+    getSymbolData(getClockMinutes(), &symbols[0], &symbols[1]);
+    getSymbolData(getClockHours(), &symbols[2], &symbols[3]);
 
     for (uint8_t i = 0; i < 4; ++i)
     {
         drawDigit(i, symbols[i]);
-        _delay_ms(DISPLAY_DIGIT_DELAY_MS);
+        _delay_ms(2);
     }
-}
-
-
-/**
-    Firmware entry point.
-*/
-int main()
-{
-    setupIoPins();
-    setupTimers();
-    sei();
-
-    // The display should blink at powerup to indicate power failure.
-    setDisplayBlink(true);
-
-    while (true)
-    {
-        checkForSpeedMode();
-        drawDigits();
-
-        // Stop blinking if speed mode is ever used to set the clock.
-        if (isFastClockMode())
-        {
-            setDisplayBlink(false);
-        }
-    }
-
 }
