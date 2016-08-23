@@ -19,7 +19,7 @@ SOURCES=$(wildcard $(SRC_DIR)/*.c)
 OBJECTS=$(SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 
 
-.PHONY: install set_fuses clean
+.PHONY: install fuses clean
 
 
 $(HEX_FILE): $(ELF_FILE) | $(BUILD_DIR)
@@ -42,7 +42,7 @@ $(BUILD_DIR):
 install: $(HEX_FILE)
 	avrdude -c $(PROGRAMMER) -p $(PART_SHORT) -U flash:w:$<:i
 
-set_fuses:
+fuses:
 	avrdude -F -V -c $(PROGRAMMER) -p $(PART_SHORT) -U lfuse:w:0x7d:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m
 
 clean:
