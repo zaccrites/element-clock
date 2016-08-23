@@ -1,7 +1,7 @@
 /**
     Real-time clock control.
 
-        "We're all here, the lights and noise are blinding.
+        "We're all here; the lights and noise are blinding.
          We hang back-- it's all in the timing."
 
     @author Zac Crites

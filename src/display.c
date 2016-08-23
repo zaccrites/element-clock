@@ -376,26 +376,26 @@ static void drawDigit(uint8_t digit, uint16_t symbol)
 {
     clearShiftRegister();
 
-    bool digitSelectBit0 = (digit & 0x01);
-    bool digitSelectBit1 = (digit & 0x02);
+    bool digitSelect1 = (digit & 0x01);
+    bool digitSelect2 = (digit & 0x02);
 
-    shiftOutBit(symbol & SEG_E);
-    shiftOutBit(symbol & SEG_M);
-    shiftOutBit(symbol & SEG_L);
-    shiftOutBit(symbol & SEG_K);
-    shiftOutBit(symbol & SEG_J);
-    shiftOutBit(symbol & SEG_D);
-    shiftOutBit(symbol & SEG_C);
-    shiftOutBit(digitSelectBit0);
+    shiftOutBit( ! (symbol & SEG_C));
+    shiftOutBit( ! (symbol & SEG_D));
+    shiftOutBit( ! (symbol & SEG_J));
+    shiftOutBit( ! (symbol & SEG_K));
+    shiftOutBit( ! (symbol & SEG_L));
+    shiftOutBit( ! (symbol & SEG_M));
+    shiftOutBit( ! (symbol & SEG_E));
+    shiftOutBit(digitSelect1);
 
-    shiftOutBit(symbol & SEG_F);
-    shiftOutBit(symbol & SEG_P);
-    shiftOutBit(symbol & SEG_G);
-    shiftOutBit(symbol & SEG_H);
-    shiftOutBit(symbol & SEG_N);
-    shiftOutBit(symbol & SEG_A);
-    shiftOutBit(symbol & SEG_B);
-    shiftOutBit(digitSelectBit1);
+    shiftOutBit( ! (symbol & SEG_B));
+    shiftOutBit( ! (symbol & SEG_A));
+    shiftOutBit( ! (symbol & SEG_N));
+    shiftOutBit( ! (symbol & SEG_H));
+    shiftOutBit( ! (symbol & SEG_G));
+    shiftOutBit( ! (symbol & SEG_P));
+    shiftOutBit( ! (symbol & SEG_F));
+    shiftOutBit(digitSelect2);
 
     latchShiftRegister();
 }
