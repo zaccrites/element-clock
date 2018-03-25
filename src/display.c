@@ -401,15 +401,35 @@ static void drawDigit(uint8_t digit, uint16_t symbol)
 }
 
 
+static void blankDigit(uint8_t digit)
+{
+    uint16_t symbol = pgm_read_word(displayFont + ' ');
+    drawDigit(digit, symbol);
+}
+
+
 void drawDisplay()
 {
+    uint8_t clockHours = getClockHours();
+    bool isNight = clockHours >= 20;
+
     uint16_t symbols[4];
     getSymbolData(getClockMinutes(), &symbols[0], &symbols[1]);
-    getSymbolData(getClockHours(), &symbols[2], &symbols[3]);
+    getSymbolData(clockHours, &symbols[2], &symbols[3]);
 
     for (uint8_t i = 0; i < 4; ++i)
     {
-        drawDigit(i, symbols[i]);
-        _delay_ms(2);
+        if (isNight)
+        {
+            blankDigit(i);
+            _delay_ms(1.995);
+            drawDigit(i, symbols[i]);
+            _delay_ms(0.005);
+        }
+        else
+        {
+            drawDigit(i, symbols[i]);
+            _delay_ms(2);
+        }
     }
 }
