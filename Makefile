@@ -26,7 +26,7 @@ $(HEX_FILE): $(ELF_FILE) | $(BUILD_DIR)
 	$(OBJCOPY) -j .text -j .data -O ihex $< $@
 
 $(ELF_FILE): $(OBJECTS) | $(BUILD_DIR)
-	$(LINKER) $(LDFLAGS) $(OBJECTS) -o $(ELF_FILE)
+	$(LINKER) $(LDFLAGS) $(OBJECTS) -o $@
 
 # http://stackoverflow.com/a/2501673
 DEPS=$(OBJECTS:%.o=%.d)
