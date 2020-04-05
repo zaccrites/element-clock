@@ -1,5 +1,4 @@
-
-# About
+# Element Clock
 
 This is an AVR-based 24-hour digital clock.
 It can display the current time either numbers or the corresponding
